@@ -1,0 +1,24 @@
+// mbuild.mettle: the project file for uuid. `mbuild help` lists its commands.
+//
+// Layout: src/uuid.mettle is the facade; modules sit in src/uuid/.
+// Tests: tests/<name>_test.mettle, run with `mbuild test` and `mbuild test -r`.
+import "mbuild/api";
+
+fn project() {
+  mb_package("uuid", "0.1.0");
+  mb_meta("description", "RFC 9562 UUIDs for Mettle: versions 1 to 8, nil and max, fast parse and format, and ULID");
+  mb_meta("license", "Apache-2.0");
+  mb_meta("repository", "https://github.com/Lex-Dellimere/Uuid");
+  mb_import_root("src");
+  mb_bin("bench", "bench/bench.mettle");
+  mb_bin("ids", "examples/ids.mettle");
+}
+
+fn deps() {
+}
+
+// bench: build the benchmark in release and run it (`mbuild bench`).
+fn cmd_bench(a: MbArgs*) -> int32 {
+  if (mb_mbuild("build -r") != 0) { return 1; }
+  return mb_cmd_run(mb_cmd(mb_out("bench", mb_os(), "release")));
+}

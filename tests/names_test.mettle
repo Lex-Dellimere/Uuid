@@ -1,0 +1,22 @@
+// v3 and v5 against Python's uuid module on 400 names, including empty
+// names and lengths around the 64-byte hash block.
+import "std/io";
+import "uuid/uuid";
+import "tutil";
+
+fn main() -> int32 {
+  var text: string = t_read("tests/data/names.txt");
+  var pos: int64 = 0;
+  var n: int64 = 0;
+  while (pos < (int64)text.length) {
+    var line: string = t_line(text, &pos);
+    if (line.length == 0 || line[0] == '#') { continue; }
+    var ns: Uuid = t_u(t_field(line, 0));
+    var name: string = t_field(line, 1);
+    t_ok("v3 {name}", t_is(uuid_v3(ns, name), t_field(line, 2)));
+    t_ok("v5 {name}", t_is(uuid_v5(ns, name), t_field(line, 3)));
+    n = n + 1;
+  }
+  t_ok("400 names read", n == 400);
+  return t_done("names");
+}

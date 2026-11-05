@@ -1,0 +1,102 @@
+// Generated UUIDs: versions, variants, uniqueness and time order.
+import "std/io";
+import "std/time";
+import "uuid/uuid";
+import "tutil";
+
+const N: int64 = 20000;
+
+fn check_v4() {
+  var prev: Uuid = uuid_v4();
+  var ones: int64 = 0;
+  for i in 0..N {
+    var u: Uuid = uuid_v4();
+    t_ok("v4 version", uuid_version(u) == 4 && uuid_variant(u) == UUID_VARIANT_RFC);
+    t_ok("v4 differs", !uuid_eq(u, prev));
+    ones = ones + (int64)(u.b[0] & (uint8)1);
+    prev = u;
+  }
+  // A fair bit: about N/2 ones.
+  t_ok("v4 bits look random", ones > N / 2 - 600 && ones < N / 2 + 600);
+  var many: Uuid[64];
+  t_ok("v4 fill", uuid_v4_fill(&many[0], 64));
+  for i in 0..64 { t_ok("v4 fill version", uuid_version(many[i]) == 4 && uuid_variant(many[i]) == UUID_VARIANT_RFC); }
+  t_ok("v4 fill differs", !uuid_eq(many[0], many[63]));
+}
+
+fn check_v7() {
+  var before: uint64 = (uint64)time_unix_ms();
+  var prev: Uuid = uuid_v7();
+  for i in 0..N {
+    var u: Uuid = uuid_v7();
+    t_ok("v7 version", uuid_version(u) == 7 && uuid_variant(u) == UUID_VARIANT_RFC);
+    t_ok("v7 goes up", uuid_cmp(prev, u) < 0);
+    prev = u;
+  }
+  var ms: uint64 = 0;
+  var after: uint64 = (uint64)time_unix_ms();
+  t_ok("v7 time", uuid_unix_ms(prev, &ms) && ms >= before && ms <= after + 2);
+
+  // A frozen clock and a clock that steps back still go up.
+  var g: UuidV7Gen;
+  g.last_ms = 0;
+  g.counter = 0;
+  var p: Uuid = uuid_v7_next(&g, 1000);
+  for i in 0..N {
+    var t: uint64 = 1000;
+    if (i % 3 == 0) { t = 990; }
+    var u: Uuid = uuid_v7_next(&g, t);
+    t_ok("v7 frozen goes up", uuid_cmp(p, u) < 0);
+    p = u;
+  }
+  t_ok("v7 frozen stays near", uuid_unix_ms(p, &ms) && ms >= (uint64)1000 && ms <= (uint64)1001);
+  // Counter overflow moves to the next millisecond.
+  g.counter = 0x3FFFFFFFFFF;
+  var o: Uuid = uuid_v7_next(&g, 1000);
+  t_ok("v7 overflow", uuid_cmp(p, o) < 0 && uuid_unix_ms(o, &ms) && ms == g.last_ms);
+  var at: Uuid = uuid_v7_at(1645557742000);
+  t_ok("v7 at", uuid_unix_ms(at, &ms) && ms == (uint64)1645557742000 && uuid_version(at) == 7);
+}
+
+fn check_v1_v6() {
+  var before: uint64 = (uint64)time_unix_ms();
+  var p1: Uuid = uuid_v1();
+  var p6: Uuid = uuid_v6();
+  var ps: uint64 = 0;
+  uuid_ticks(p6, &ps);
+  for i in 0..N {
+    var a: Uuid = uuid_v1();
+    var b: Uuid = uuid_v6();
+    t_ok("v1 version", uuid_version(a) == 1 && uuid_variant(a) == UUID_VARIANT_RFC);
+    t_ok("v6 version", uuid_version(b) == 6 && uuid_variant(b) == UUID_VARIANT_RFC);
+    t_ok("v6 goes up", uuid_cmp(p6, b) < 0);
+    var ta: uint64 = 0;
+    var tb: uint64 = 0;
+    t_ok("ticks increase", uuid_ticks(a, &ta) && uuid_ticks(b, &tb) && ta > ps && tb > ta);
+    t_ok("v1 differs", !uuid_eq(a, p1));
+    p1 = a;
+    p6 = b;
+    ps = tb;
+  }
+  var nd: uint8[6];
+  uuid_node(p1, &nd[0]);
+  t_ok("random node has multicast bit", (nd[0] & (uint8)1) == (uint8)1);
+  var ms: uint64 = 0;
+  t_ok("v1 time", uuid_unix_ms(p1, &ms) && ms >= before && ms <= (uint64)time_unix_ms() + 2);
+  var mac: uint8[6];
+  for i in 0..6 { mac[i] = (uint8)(i * 16 + 2); }
+  uuid_set_node(&mac[0]);
+  var m: Uuid = uuid_v1();
+  uuid_node(m, &nd[0]);
+  t_ok("set node", nd[0] == (uint8)2 && nd[5] == (uint8)82);
+  t_ok("v1 -> v6 -> v1", uuid_eq(uuid_v6_to_v1(uuid_v1_to_v6(m)), m));
+  t_ok("v4 has no time", !uuid_unix_ms(uuid_v4(), &ms) && !uuid_ticks(uuid_v4(), &ps));
+  t_ok("convert keeps others", uuid_eq(uuid_v1_to_v6(uuid_nil()), uuid_nil()));
+}
+
+fn main() -> int32 {
+  check_v4();
+  check_v7();
+  check_v1_v6();
+  return t_done("gen");
+}

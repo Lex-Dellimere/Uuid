@@ -1,0 +1,87 @@
+// The test vectors of RFC 9562, Appendices A and B.
+import "std/io";
+import "uuid/uuid";
+import "tutil";
+
+// Node and clock sequence shared by the v1 and v6 examples (A.1, A.5).
+fn node_a(out: uint8*) {
+  out[0] = 0x9F; out[1] = 0x6B; out[2] = 0xDE; out[3] = 0xCE; out[4] = 0xD8; out[5] = 0x46;
+}
+
+fn check_v1_v6() {
+  var node: uint8[6];
+  node_a(&node[0]);
+  // A.1: 2022-02-22 19:22:22 UTC as 100 ns ticks since 1582.
+  var ticks: uint64 = (uint64)0x1EC9414C232AB00;
+  var v1: Uuid = uuid_v1_from(ticks, 0x33C8, &node[0]);
+  t_ok("A.1 v1", t_is(v1, "c232ab00-9414-11ec-b3c8-9f6bdeced846"));
+  t_ok("A.1 version", uuid_version(v1) == 1 && uuid_variant(v1) == UUID_VARIANT_RFC);
+  var t: uint64 = 0;
+  t_ok("A.1 ticks back", uuid_ticks(v1, &t) && t == ticks);
+  t_ok("A.1 clock seq", uuid_clock_seq(v1) == (uint16)0x33C8);
+  var ms: uint64 = 0;
+  t_ok("A.1 unix ms", uuid_unix_ms(v1, &ms) && ms == (uint64)1645557742000);
+
+  // A.5: the same fields as v6.
+  var v6: Uuid = uuid_v6_from(ticks, 0x33C8, &node[0]);
+  t_ok("A.5 v6", t_is(v6, "1ec9414c-232a-6b00-b3c8-9f6bdeced846"));
+  t_ok("A.5 ticks back", uuid_ticks(v6, &t) && t == ticks);
+  t_ok("A.5 unix ms", uuid_unix_ms(v6, &ms) && ms == (uint64)1645557742000);
+  t_ok("v1 -> v6", uuid_eq(uuid_v1_to_v6(v1), v6));
+  t_ok("v6 -> v1", uuid_eq(uuid_v6_to_v1(v6), v1));
+  var nd: uint8[6];
+  uuid_node(v6, &nd[0]);
+  t_ok("node back", nd[0] == (uint8)0x9F && nd[5] == (uint8)0x46);
+}
+
+fn check_named() {
+  // A.2 and A.4: DNS namespace, name "www.example.com".
+  var a: Uuid = uuid_v3(uuid_ns_dns(), "www.example.com");
+  t_ok("A.2 v3", t_is(a, "5df41881-3aed-3515-88a7-2f4a814cf09e"));
+  var b: Uuid = uuid_v5(uuid_ns_dns(), "www.example.com");
+  t_ok("A.4 v5", t_is(b, "2ed6657d-e927-568b-95e1-2665a8aea6a2"));
+  t_ok("A.4 version", uuid_version(b) == 5 && uuid_variant(b) == UUID_VARIANT_RFC);
+  // Section 6.6 namespaces.
+  t_ok("ns dns", t_is(uuid_ns_dns(), "6ba7b810-9dad-11d1-80b4-00c04fd430c8"));
+  t_ok("ns url", t_is(uuid_ns_url(), "6ba7b811-9dad-11d1-80b4-00c04fd430c8"));
+  t_ok("ns oid", t_is(uuid_ns_oid(), "6ba7b812-9dad-11d1-80b4-00c04fd430c8"));
+  t_ok("ns x500", t_is(uuid_ns_x500(), "6ba7b814-9dad-11d1-80b4-00c04fd430c8"));
+}
+
+fn check_v4_v7_v8() {
+  // A.3: v4 is 122 random bits; the example's bits survive v4_from as is.
+  var r: Uuid = t_u("919108f7-52d1-4320-9bac-f847db4148a8");
+  var v4: Uuid = uuid_v4_from(&r.b[0]);
+  t_ok("A.3 v4", uuid_eq(v4, r) && uuid_version(v4) == 4);
+
+  // A.6: v7 for 2022-02-22 19:22:22 UTC.
+  var v7: Uuid = uuid_v7_from((uint64)0x017F22E279B0, 0xCC3, (uint64)0x18C4DC0C0C07398F);
+  t_ok("A.6 v7", t_is(v7, "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"));
+  var ms: uint64 = 0;
+  t_ok("A.6 unix ms", uuid_unix_ms(v7, &ms) && ms == (uint64)1645557742000);
+
+  // B.1 and B.2: v8 examples are custom bytes with version and variant set.
+  var x: Uuid = t_u("2489e9ad-2ee2-8e00-8ec9-32d5f69181c0");
+  t_ok("B.1 v8", uuid_eq(uuid_v8(&x.b[0]), x) && uuid_version(x) == 8);
+  var y: Uuid = t_u("5c146b14-3c52-8afd-938a-375d0df1fbf6");
+  t_ok("B.2 v8", uuid_eq(uuid_v8(&y.b[0]), y) && uuid_variant(y) == UUID_VARIANT_RFC);
+}
+
+fn check_nil_max() {
+  t_ok("nil", t_is(uuid_nil(), "00000000-0000-0000-0000-000000000000"));
+  t_ok("max", t_is(uuid_max(), "ffffffff-ffff-ffff-ffff-ffffffffffff"));
+  t_ok("nil is nil", uuid_is_nil(uuid_nil()) && !uuid_is_nil(uuid_max()));
+  t_ok("max is max", uuid_is_max(uuid_max()) && !uuid_is_max(uuid_nil()));
+  t_ok("nil < max", uuid_cmp(uuid_nil(), uuid_max()) < 0);
+  t_ok("max parses", uuid_is_max(t_u("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")));
+  t_ok("nil version", uuid_version(uuid_nil()) == 0 && uuid_variant(uuid_nil()) == UUID_VARIANT_NCS);
+  t_ok("max variant", uuid_version(uuid_max()) == 15 && uuid_variant(uuid_max()) == UUID_VARIANT_FUTURE);
+}
+
+fn main() -> int32 {
+  check_v1_v6();
+  check_named();
+  check_v4_v7_v8();
+  check_nil_max();
+  return t_done("rfc");
+}

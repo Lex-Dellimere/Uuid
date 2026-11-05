@@ -1,0 +1,72 @@
+// ULIDs: encoding against a Python reference, parsing, ordering.
+import "std/io";
+import "std/mem";
+import "std/time";
+import "uuid/uuid";
+import "tutil";
+
+fn check_corpus() {
+  var text: string = t_read("tests/data/ulid.txt");
+  var pos: int64 = 0;
+  while (pos < (int64)text.length) {
+    var line: string = t_line(text, &pos);
+    if (line.length == 0 || line[0] == '#') { continue; }
+    var s: string = t_field(line, 0);
+    var u: Uuid = t_u(t_field(line, 1));
+    var l: UuidUlid = uuid_ulid_from_uuid(u);
+    var f: string = uuid_ulid_to_string(l);
+    t_ok("ulid encode {s} got {f}", t_streq(f, s));
+    free(f.chars);
+    var back: UuidUlid;
+    t_ok("ulid parse {s}", uuid_ulid_try_parse(s, &back) && uuid_ulid_eq(back, l));
+    t_ok("ulid to uuid {s}", uuid_eq(uuid_ulid_to_uuid(back), u));
+  }
+}
+
+fn check_parse() {
+  var u: UuidUlid;
+  // The spec's example and lower case.
+  t_ok("spec example", uuid_ulid_try_parse("01ARZ3NDEKTSV4RRFFQ69G5FAV", &u));
+  var v: UuidUlid;
+  t_ok("lower case", uuid_ulid_try_parse("01arz3ndektsv4rrffq69g5fav", &v) && uuid_ulid_eq(u, v));
+  t_ok("max", uuid_ulid_try_parse("7ZZZZZZZZZZZZZZZZZZZZZZZZZ", &v) && uuid_is_max(uuid_ulid_to_uuid(v)));
+  t_ok("overflow", !uuid_ulid_try_parse("8ZZZZZZZZZZZZZZZZZZZZZZZZZ", &v));
+  t_ok("short", !uuid_ulid_try_parse("01ARZ3NDEKTSV4RRFFQ69G5FA", &v));
+  t_ok("letter I", !uuid_ulid_try_parse("01ARZ3NDEKTSV4RRFFQ69G5FAI", &v));
+  t_ok("letter U", !uuid_ulid_try_parse("01ARZ3NDEKTSV4RRFFQ69G5FAU", &v));
+  match (uuid_ulid_parse("01ARZ3NDEKTSV4RRFFQ69G5FA!")) {
+    case Ok(x): { t_ok("bang", false); }
+    case Err(e): { t_ok("bang at 25", e.at == 25); }
+  }
+}
+
+fn check_gen() {
+  var before: uint64 = (uint64)time_unix_ms();
+  var p: UuidUlid = uuid_ulid();
+  for i in 0..20000 {
+    var u: UuidUlid = uuid_ulid();
+    t_ok("ulid goes up", uuid_ulid_cmp(p, u) < 0);
+    p = u;
+  }
+  t_ok("ulid time", uuid_ulid_ms(p) >= before && uuid_ulid_ms(p) <= (uint64)time_unix_ms() + 2);
+  var g: UuidUlidGen;
+  g.used = false;
+  var a: UuidUlid = uuid_ulid_next(&g, 5000);
+  var b: UuidUlid = uuid_ulid_next(&g, 5000);
+  var c: UuidUlid = uuid_ulid_next(&g, 4000);
+  t_ok("same ms adds one", uuid_lo(uuid_ulid_to_uuid(b)) == uuid_lo(uuid_ulid_to_uuid(a)) + 1 || uuid_lo(uuid_ulid_to_uuid(b)) == (uint64)0);
+  t_ok("clock back still up", uuid_ulid_cmp(b, c) < 0);
+  // Random part all ones rolls into the next millisecond.
+  var r: uint8[10];
+  for i in 0..10 { r[i] = 255; }
+  g.last = uuid_ulid_from(6000, &r[0]);
+  var d: UuidUlid = uuid_ulid_next(&g, 6000);
+  t_ok("carry", uuid_ulid_ms(d) == (uint64)6001);
+}
+
+fn main() -> int32 {
+  check_corpus();
+  check_parse();
+  check_gen();
+  return t_done("ulid");
+}

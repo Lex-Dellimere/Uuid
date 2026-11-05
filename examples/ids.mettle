@@ -1,0 +1,38 @@
+// ids: print new UUIDs from the command line's point of view.
+//
+//   mbuild run ids
+//
+// Shows one of each kind and reads a UUID back.
+import "std/io";
+import "std/mem";
+import "uuid/uuid";
+
+fn show(label: string, u: Uuid) {
+  var s: string = uuid_to_string(u);
+  println("{label}  {s}");
+  free(s.chars);
+}
+
+fn main() -> int32 {
+  show("v1  ", uuid_v1());
+  show("v3  ", uuid_v3(uuid_ns_dns(), "www.example.com"));
+  show("v4  ", uuid_v4());
+  show("v5  ", uuid_v5(uuid_ns_dns(), "www.example.com"));
+  show("v6  ", uuid_v6());
+  show("v7  ", uuid_v7());
+  show("nil ", uuid_nil());
+  show("max ", uuid_max());
+  var l: string = uuid_ulid_to_string(uuid_ulid());
+  println("ulid  {l}");
+  free(l.chars);
+
+  match (uuid_parse("urn:uuid:017F22E2-79B0-7CC3-98C4-DC0C0C07398F")) {
+    case Ok(u): {
+      var ms: uint64 = 0;
+      uuid_unix_ms(u, &ms);
+      println("parsed a v{uuid_version(u)} UUID made at Unix ms {ms}");
+    }
+    case Err(e): { println("bad UUID at {e.at}: {e.why}"); }
+  }
+  return 0;
+}

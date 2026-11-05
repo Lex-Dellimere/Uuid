@@ -1,0 +1,147 @@
+// Parsing and formatting in every form, fields, byte order, errors.
+import "std/io";
+import "std/mem";
+import "std/conv";
+import "uuid/uuid";
+import "tutil";
+
+fn upper(s: string) -> string {
+  var buf: uint8* = (uint8*)malloc((int64)s.length + 1);
+  for i in 0..(int64)s.length { buf[i] = (uint8)to_upper(s[i]); }
+  return str_from_bytes((cstring)buf, (int64)s.length);
+}
+
+fn check_forms(h: string, u: Uuid) {
+  var simple: string = uuid_format(u, UUID_FMT_SIMPLE, false);
+  var urn: string = uuid_format(u, UUID_FMT_URN, false);
+  var braced: string = uuid_format(u, UUID_FMT_BRACED, true);
+  var up: string = uuid_format(u, UUID_FMT_HYPHENATED, true);
+  t_ok("simple length", simple.length == 32);
+  t_ok("urn {urn}", t_streq(str_slice(urn, 0, 9), "urn:uuid:") && t_streq(str_slice(urn, 9, 36), h));
+  t_ok("braced {braced}", braced[0] == '{' && braced[37] == '}' && t_streq(str_slice(braced, 1, 36), upper(h)));
+  t_ok("upper {up}", t_streq(up, upper(h)));
+  var x: Uuid;
+  t_ok("parse simple {simple}", uuid_try_parse(simple, &x) && uuid_eq(x, u));
+  t_ok("parse urn {urn}", uuid_try_parse(urn, &x) && uuid_eq(x, u));
+  t_ok("parse braced {braced}", uuid_try_parse(braced, &x) && uuid_eq(x, u));
+  t_ok("parse upper {up}", uuid_try_parse(up, &x) && uuid_eq(x, u));
+  t_ok("parse URN upper", uuid_try_parse(upper(urn), &x) && uuid_eq(x, u));
+  free(simple.chars);
+  free(urn.chars);
+  free(braced.chars);
+  free(up.chars);
+}
+
+fn check_corpus() {
+  var text: string = t_read("tests/data/text.txt");
+  var pos: int64 = 0;
+  var prev: Uuid = uuid_nil();
+  var prev_s: string = "00000000-0000-0000-0000-000000000000";
+  while (pos < (int64)text.length) {
+    var line: string = t_line(text, &pos);
+    if (line.length == 0 || line[0] == '#') { continue; }
+    var h: string = t_field(line, 0);
+    var u: Uuid = t_u(h);
+    var hi: uint64 = t_u64(t_field(line, 1));
+    var lo: uint64 = t_u64(t_field(line, 2));
+    t_ok("hi {h}", uuid_hi(u) == hi);
+    t_ok("lo {h}", uuid_lo(u) == lo);
+    t_ok("from u64 {h}", uuid_eq(uuid_from_u64(hi, lo), u));
+    t_ok("version {h}", uuid_version(u) == (int32)str_to_i64_or(t_field(line, 3), -1));
+    t_ok("variant {h}", uuid_variant(u) == (int32)str_to_i64_or(t_field(line, 4), -1));
+    t_ok("round trip {h}", t_is(u, h));
+    check_forms(h, u);
+    // Order matches string order of the lower-case hyphenated form.
+    var c: int32 = uuid_cmp(prev, u);
+    var sc: int32 = 0;
+    for i in 0..36 {
+      if (sc == 0 && prev_s[i] != h[i]) {
+        sc = 1;
+        if (prev_s[i] < h[i]) { sc = -1; }
+      }
+    }
+    t_ok("order {h}", c == sc && uuid_lt(prev, u) == (sc < 0));
+    t_ok("hash stable {h}", uuid_hash(u) == uuid_hash(uuid_from_u64(hi, lo)));
+    prev = u;
+    prev_s = h;
+  }
+}
+
+fn check_fields() {
+  var u: Uuid = t_u("00112233-4455-6677-8899-aabbccddeeff");
+  var d1: uint32 = 0;
+  var d2: uint16 = 0;
+  var d3: uint16 = 0;
+  var d4: uint8[8];
+  uuid_to_fields(u, &d1, &d2, &d3, &d4[0]);
+  t_ok("fields", d1 == (uint32)0x00112233 && d2 == (uint16)0x4455 && d3 == (uint16)0x6677 && d4[0] == (uint8)0x88 && d4[7] == (uint8)0xff);
+  t_ok("from fields", uuid_eq(uuid_from_fields(d1, d2, d3, &d4[0]), u));
+  var le: uint8[16];
+  uuid_to_bytes_le(u, &le[0]);
+  t_ok("le bytes", le[0] == (uint8)0x33 && le[3] == (uint8)0x00 && le[4] == (uint8)0x55 && le[6] == (uint8)0x77 && le[8] == (uint8)0x88);
+  t_ok("le round trip", uuid_eq(uuid_from_bytes_le(&le[0]), u));
+  var be: uint8[16];
+  uuid_to_bytes(u, &be[0]);
+  t_ok("be bytes", be[0] == (uint8)0x00 && be[15] == (uint8)0xff);
+  var v: Uuid;
+  t_ok("from slice", uuid_from_slice(&be[0], 16, &v) && uuid_eq(v, u));
+  t_ok("from slice wrong length", !uuid_from_slice(&be[0], 15, &v));
+  t_ok("hash ptr", uuid_hash_ptr((rawptr)&u) == uuid_hash(u) && uuid_equal_ptr((rawptr)&u, (rawptr)&v));
+  t_ok("hash differs", uuid_hash(uuid_nil()) != uuid_hash(uuid_max()));
+  t_ok("set version", uuid_version(uuid_v8(&be[0])) == 8);
+}
+
+fn bad(s: string, at: int64) {
+  var u: Uuid;
+  var e: UuidError;
+  var ok: bool = uuid_parse_into(s, &u, &e);
+  t_ok("rejects [{s}]", !ok);
+  if (!ok) { t_ok("error at {at} for [{s}], got {e.at}: {e.why}", e.at == at); }
+  t_ok("valid false [{s}]", !uuid_valid(s));
+}
+
+fn check_errors() {
+  bad("", 0);
+  bad("67e55044-10b1-426f-9247-bb680e5fe0c", 0);
+  bad("67e55044-10b1-426f-9247-bb680e5fe0c8 ", 0);
+  bad("67e55044x10b1-426f-9247-bb680e5fe0c8", 8);
+  bad("67e55044-10b1x426f-9247-bb680e5fe0c8", 13);
+  bad("67e55044-10b1-426fx9247-bb680e5fe0c8", 18);
+  bad("67e55044-10b1-426f-9247xbb680e5fe0c8", 23);
+  bad("g7e55044-10b1-426f-9247-bb680e5fe0c8", 0);
+  bad("67e55044-10b1-426f-9247-bb680e5fe0cg", 35);
+  bad("67e5504410b1426f9247bb680e5fe0cZ", 31);
+  bad("{{67e55044-10b1-426f-9247-bb680e5fe0c8)", 37);
+  bad("(67e55044-10b1-426f-9247-bb680e5fe0c8}", 0);
+  bad("{{67e55044-10b1-426f-9247-bb680e5fe0q8}", 35);
+  bad("urn:uuix:67e55044-10b1-426f-9247-bb680e5fe0c8", 7);
+  bad("urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0-8", 43);
+  bad("+7e55044-10b1-426f-9247-bb680e5fe0c8", 0);
+  bad("67e55044-10b1-426f-9247-bb680e5fe0é", 34);
+  match (uuid_parse("nope")) {
+    case Ok(u): { t_ok("parse nope", false); }
+    case Err(e): { t_ok("parse nope error", e.at == 0 && e.why.length > 0); }
+  }
+  match (uuid_parse("67E55044-10B1-426F-9247-BB680E5FE0C8")) {
+    case Ok(u): { t_ok("parse ok", t_is(u, "67e55044-10b1-426f-9247-bb680e5fe0c8")); }
+    case Err(e): { t_ok("parse ok", false); }
+  }
+  t_ok("or nil", uuid_is_nil(uuid_parse_or_nil("x")));
+}
+
+fn check_encode() {
+  var u: Uuid = t_u("67e55044-10b1-426f-9247-bb680e5fe0c8");
+  var buf: uint8[45];
+  t_ok("encode hyphen", uuid_encode(u, UUID_FMT_HYPHENATED, false, &buf[0]) == 36 && buf[8] == (uint8)'-');
+  t_ok("encode simple", uuid_encode(u, UUID_FMT_SIMPLE, false, &buf[0]) == 32 && buf[31] == (uint8)'8');
+  t_ok("encode urn", uuid_encode(u, UUID_FMT_URN, true, &buf[0]) == 45 && buf[44] == (uint8)'8' && buf[9] == (uint8)'6');
+  t_ok("encode braced", uuid_encode(u, UUID_FMT_BRACED, false, &buf[0]) == 38 && buf[37] == (uint8)'}');
+}
+
+fn main() -> int32 {
+  check_corpus();
+  check_fields();
+  check_errors();
+  check_encode();
+  return t_done("text");
+}

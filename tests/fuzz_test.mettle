@@ -1,0 +1,65 @@
+// Fuzz the parsers with random and mutated input: they must never crash or
+// read out of bounds, and whatever parses must format back to the same value.
+import "std/io";
+import "std/mem";
+import "std/conv";
+import "uuid/uuid";
+import "tutil";
+
+const ROUNDS: int64 = 200000;
+
+fn main() -> int32 {
+  var buf: uint8* = (uint8*)malloc(64);
+  var good: string = "urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8";
+  var parsed: int64 = 0;
+  for r in 0..ROUNDS {
+    var n: int64 = 0;
+    var k: uint64 = t_rand() % (uint64)4;
+    if (k == 0) {
+      // Pure noise of a likely length.
+      var lens: int64[6] = [26, 32, 36, 38, 45, 0];
+      n = lens[(int64)(t_rand() % (uint64)6)];
+      for i in 0..n { buf[i] = (uint8)t_rand(); }
+    } else {
+      // A valid string in some form, with a few bytes changed.
+      var u: Uuid = uuid_from_u64(t_rand(), t_rand());
+      var f: int32 = (int32)(t_rand() % (uint64)4);
+      n = uuid_encode(u, f, (t_rand() & (uint64)1) == (uint64)1, buf);
+      var edits: int64 = (int64)(t_rand() % (uint64)3);
+      for e in 0..edits {
+        var at: int64 = (int64)(t_rand() % (uint64)n);
+        var pick: uint64 = t_rand() % (uint64)4;
+        if (pick == 0) { buf[at] = (uint8)'-'; }
+        else if (pick == 1) { buf[at] = (uint8)t_rand(); }
+        else if (pick == 2) { buf[at] = (uint8)'G'; }
+        else { buf[at] = (uint8)'a'; }
+      }
+    }
+    var s: string = str_from_bytes((cstring)buf, n);
+    var x: Uuid;
+    var e: UuidError;
+    if (uuid_parse_into(s, &x, &e)) {
+      parsed = parsed + 1;
+      var y: Uuid;
+      var f: string = uuid_to_string(x);
+      t_ok("reparse", uuid_try_parse(f, &y) && uuid_eq(x, y));
+      free(f.chars);
+    } else {
+      t_ok("error offset in range", e.at >= 0 && e.at <= n && e.why.length > 0);
+    }
+    var l: UuidUlid;
+    if (uuid_ulid_parse_into(s, &l, &e)) {
+      var g: string = uuid_ulid_to_string(l);
+      var m: UuidUlid;
+      t_ok("ulid reparse", uuid_ulid_try_parse(g, &m) && uuid_ulid_eq(l, m));
+      free(g.chars);
+    }
+  }
+  t_ok("some inputs parsed", parsed > ROUNDS / 10);
+  // Every prefix of a valid string, so short reads are checked too.
+  for n in 0..(int64)good.length + 1 {
+    var u: Uuid;
+    uuid_try_parse(str_slice(good, 0, n), &u);
+  }
+  return t_done("fuzz");
+}

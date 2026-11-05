@@ -1,0 +1,65 @@
+// bench: nanoseconds per operation (`mbuild bench`, release build).
+import "std/io";
+import "std/time";
+import "uuid/uuid";
+
+const N: int64 = 2000000;
+
+fn report(what: string, t0: int64, n: int64) {
+  var ns: int64 = (time_mono_ns() - t0) * 10 / n;
+  println("{what}: {ns / 10}.{ns % 10} ns");
+}
+
+fn main() -> int32 {
+  var u: Uuid = uuid_from_u64((uint64)0x67e5504410b1426f, (uint64)0x9247bb680e5fe0c8);
+  var buf: uint8[45];
+  var sink: uint64 = 0;
+
+  var t0: int64 = time_mono_ns();
+  for i in 0..N {
+    u.b[15] = (uint8)i;
+    uuid_encode(u, UUID_FMT_HYPHENATED, false, &buf[0]);
+    sink = sink + (uint64)buf[35];
+  }
+  report("format hyphenated", t0, N);
+
+  var s: string = "67e55044-10b1-426f-9247-bb680e5fe0c8";
+  var x: Uuid;
+  t0 = time_mono_ns();
+  for i in 0..N {
+    uuid_try_parse(s, &x);
+    sink = sink + (uint64)x.b[(int64)i & 15];
+  }
+  report("parse hyphenated", t0, N);
+
+  var simple: string = "67e5504410b1426f9247bb680e5fe0c8";
+  t0 = time_mono_ns();
+  for i in 0..N {
+    uuid_try_parse(simple, &x);
+    sink = sink + (uint64)x.b[(int64)i & 15];
+  }
+  report("parse simple", t0, N);
+
+  t0 = time_mono_ns();
+  for i in 0..N { sink = sink + uuid_hi(uuid_v4()); }
+  report("v4", t0, N);
+
+  t0 = time_mono_ns();
+  for i in 0..N { sink = sink + uuid_lo(uuid_v7()); }
+  report("v7", t0, N);
+
+  t0 = time_mono_ns();
+  for i in 0..N { sink = sink + uuid_lo(uuid_v6()); }
+  report("v6", t0, N);
+
+  t0 = time_mono_ns();
+  for i in 0..N / 10 { sink = sink + uuid_lo(uuid_v5(uuid_ns_dns(), "www.example.com")); }
+  report("v5 (short name)", t0, N / 10);
+
+  t0 = time_mono_ns();
+  for i in 0..N { sink = sink + uuid_hash(u); u.b[0] = (uint8)i; }
+  report("hash", t0, N);
+
+  println("(ignore: {sink % 10})");
+  return 0;
+}

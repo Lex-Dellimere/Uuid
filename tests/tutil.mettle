@@ -1,0 +1,113 @@
+// Shared helpers for the test programs: checks, data files, fields.
+
+import "std/io";
+import "std/mem";
+import "std/conv";
+import "std/file";
+import "uuid/uuid";
+
+var g_checks: int64 = 0;
+var g_fails: int64 = 0;
+
+export fn t_ok(name: string, cond: bool) {
+  g_checks = g_checks + 1;
+  if (!cond) {
+    g_fails = g_fails + 1;
+    if (g_fails <= 200) { println("FAIL {name}"); }
+  }
+}
+
+export fn t_done(what: string) -> int32 {
+  println("{what}: {g_checks - g_fails} of {g_checks} checks passed");
+  if (g_fails > 0) { return 1; }
+  return 0;
+}
+
+// Reads a whole file. The bytes are never freed: test data lives until exit.
+export fn t_read(path: string) -> string {
+  var fd: int64 = file_open(path, FILE_READ);
+  if (fd < 0) {
+    println("FAIL cannot open {path}");
+    g_fails = g_fails + 1;
+    return "";
+  }
+  var n: int64 = file_size(fd);
+  var buf: uint8* = (uint8*)malloc(n + 1);
+  var got: int64 = 0;
+  while (got < n) {
+    var k: int64 = file_read_at(fd, buf + got, n - got, got);
+    if (k <= 0) { break; }
+    got = got + k;
+  }
+  file_close(fd);
+  return str_from_bytes((cstring)buf, got);
+}
+
+// The next line of text at *pos, without its newline. *pos moves past it.
+export fn t_line(text: string, pos: int64*) -> string {
+  var st: int64 = *pos;
+  var i: int64 = st;
+  while (i < (int64)text.length && text[i] != '\n') { i = i + 1; }
+  *pos = i + 1;
+  return str_slice(text, st, i - st);
+}
+
+// Field k (from 0) of a tab-separated line, or "" if there is none.
+export fn t_field(line: string, k: int32) -> string {
+  var i: int64 = 0;
+  var f: int32 = 0;
+  var st: int64 = 0;
+  while (i <= (int64)line.length) {
+    if (i == (int64)line.length || line[i] == '\t') {
+      if (f == k) { return str_slice(line, st, i - st); }
+      f = f + 1;
+      st = i + 1;
+    }
+    i = i + 1;
+  }
+  return "";
+}
+
+export fn t_streq(a: string, b: string) -> bool {
+  if (a.length != b.length) { return false; }
+  for i in 0..(int64)a.length {
+    if (a[i] != b[i]) { return false; }
+  }
+  return true;
+}
+
+// Parses or fails the test.
+export fn t_u(s: string) -> Uuid {
+  var u: Uuid;
+  if (!uuid_try_parse(s, &u)) {
+    t_ok("parse {s}", false);
+    return uuid_nil();
+  }
+  return u;
+}
+
+// True if u formats (lower-case hyphenated) to exactly s.
+export fn t_is(u: Uuid, s: string) -> bool {
+  var f: string = uuid_to_string(u);
+  var ok: bool = t_streq(f, s);
+  free(f.chars);
+  return ok;
+}
+
+// A simple repeatable random generator (xorshift64*).
+var g_rng: uint64 = 88172645463325252;
+export fn t_rand() -> uint64 {
+  g_rng = g_rng ^ (g_rng >> (uint64)12);
+  g_rng = g_rng ^ (g_rng << (uint64)25);
+  g_rng = g_rng ^ (g_rng >> (uint64)27);
+  return g_rng * (uint64)2685821657736338717;
+}
+
+// An unsigned decimal number; 0 for anything else.
+export fn t_u64(s: string) -> uint64 {
+  var v: uint64 = 0;
+  for i in 0..(int64)s.length {
+    v = v * (uint64)10 + (uint64)((int32)s[i] - 48);
+  }
+  return v;
+}
