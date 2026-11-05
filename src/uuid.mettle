@@ -1,5 +1,5 @@
 // uuid: RFC 9562 UUIDs for Mettle, in pure Mettle. Versions 3 and 5 hash
-// with cryptex (package "crypto").
+// with cryptex (package "cryptex").
 //
 //   import "uuid/uuid";
 //

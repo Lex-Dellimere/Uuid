@@ -5,7 +5,7 @@
 import "mbuild/api";
 
 fn project() {
-  mb_package("uuid", "0.1.0");
+  mb_package("uuid", "0.1.1");
   mb_meta("description", "RFC 9562 UUIDs for Mettle: versions 1 to 8, nil and max, fast parse and format, and ULID");
   mb_meta("license", "Apache-2.0");
   mb_meta("repository", "https://github.com/Lex-Dellimere/Uuid");
@@ -14,9 +14,9 @@ fn project() {
   mb_bin("ids", "examples/ids.mettle");
 }
 
-// cryptex by path until the registry is live; then mb_dep("crypto", "0.2.1").
+// cryptex by path until the registry is live; then mb_dep("cryptex", "0.3.0").
 fn deps() {
-  mb_dep_path("crypto", "../cryptex");
+  mb_dep_path("cryptex", "../cryptex");
 }
 
 // bench: build the benchmark in release and run it (`mbuild bench`).

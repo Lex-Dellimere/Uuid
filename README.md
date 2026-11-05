@@ -3,7 +3,7 @@
 UUIDs for Mettle, in pure Mettle, following
 [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562). It needs the standard
 library and [cryptex](https://github.com/Lex-Dellimere/Cryptex) (package
-`crypto`), whose MD5 and SHA-1 make versions 3 and 5.
+`cryptex`), whose MD5 and SHA-1 make versions 3 and 5.
 
 - Versions 1, 3, 4, 5, 6, 7 and 8, plus the nil and max UUIDs.
 - Version 7 that only ever goes up, even many times in one millisecond.

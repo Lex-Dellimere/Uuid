@@ -17,7 +17,7 @@ import "std/random";
 import "std/time";
 import "std/sync";
 import "core";
-import "crypto/crypto";
+import "cryptex/cryptex";
 
 // 100 ns intervals between 1582-10-15 and 1970-01-01.
 const UG_GREGORIAN_OFFSET: uint64 = 0x01B21DD213814000;
