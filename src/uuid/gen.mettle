@@ -17,7 +17,7 @@ import "std/random";
 import "std/time";
 import "std/sync";
 import "core";
-import "hashes";
+import "crypto/crypto";
 
 // 100 ns intervals between 1582-10-15 and 1970-01-01.
 const UG_GREGORIAN_OFFSET: uint64 = 0x01B21DD213814000;
@@ -32,13 +32,24 @@ export fn uuid_ns_x500() -> Uuid { return uuid_from_u64((uint64)0x6ba7b8149dad11
 // ---- v3 and v5 ------------------------------------------------------------
 
 fn ug_named(ns: Uuid, p: uint8*, n: int64, sha1: bool, version: int32) -> Uuid {
-  var s: UuidHashState;
-  uuid_hash_init(&s, sha1);
-  uuid_hash_update(&s, &ns.b[0], 16);
-  uuid_hash_update(&s, p, n);
-  var d: uint8[20];
-  uuid_hash_final(&s, &d[0]);
-  var u: Uuid = uuid_from_bytes(&d[0]);
+  var u: Uuid;
+  if (sha1) {
+    var st: CrSha1State;
+    var d: CrSha1;
+    cr_sha1_init(&st);
+    cr_sha1_update(&st, &ns.b[0], 16);
+    cr_sha1_update(&st, p, n);
+    cr_sha1_final(&st, &d);
+    u = uuid_from_bytes(&d.b[0]);
+  } else {
+    var st5: CrMd5State;
+    var d5: CrMd5;
+    cr_md5_init(&st5);
+    cr_md5_update(&st5, &ns.b[0], 16);
+    cr_md5_update(&st5, p, n);
+    cr_md5_final(&st5, &d5);
+    u = uuid_from_bytes(&d5.b[0]);
+  }
   uuid_set_version(&u, version);
   return u;
 }

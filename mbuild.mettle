@@ -14,7 +14,9 @@ fn project() {
   mb_bin("ids", "examples/ids.mettle");
 }
 
+// cryptex by path until the registry is live; then mb_dep("crypto", "0.2.1").
 fn deps() {
+  mb_dep_path("crypto", "../cryptex");
 }
 
 // bench: build the benchmark in release and run it (`mbuild bench`).

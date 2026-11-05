@@ -101,6 +101,5 @@ you pass and take no lock.
 
 ## Hashes
 
-`uuid/hashes` has the MD5 and SHA-1 that v3 and v5 need
-(`uuid_hash_init`, `uuid_hash_update`, `uuid_hash_final`). They are not for
-security.
+Versions 3 and 5 use cryptex's `cr_md5_*` and `cr_sha1_*`. Neither hash is
+for security.

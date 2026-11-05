@@ -1,4 +1,5 @@
-// uuid: RFC 9562 UUIDs for Mettle, in pure Mettle.
+// uuid: RFC 9562 UUIDs for Mettle, in pure Mettle. Versions 3 and 5 hash
+// with cryptex (package "crypto").
 //
 //   import "uuid/uuid";
 //
@@ -9,10 +10,8 @@
 //   uuid/text    parse and format: hyphenated, simple, URN, braced
 //   uuid/gen     versions 1, 3, 4, 5, 6, 7 and 8, and reading their fields
 //   uuid/ulid    ULIDs: Crockford base32, monotonic generator
-//   uuid/hashes  the MD5 and SHA-1 that versions 3 and 5 need
 
 import "uuid/core";
-import "uuid/hashes";
 import "uuid/text";
 import "uuid/gen";
 import "uuid/ulid";

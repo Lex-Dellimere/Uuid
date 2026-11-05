@@ -7,9 +7,9 @@
   methods (section 6.2), the multicast node rule (section 6.10), sort order
   (section 6.11), and the test vectors in Appendices A and B used in
   `tests/rfc_test.mettle`.
-- [RFC 1321](https://www.rfc-editor.org/rfc/rfc1321), MD5, for version 3.
-- [FIPS 180-4](https://csrc.nist.gov/pubs/fips/180-4/upd1/final), SHA-1, for
-  version 5.
+- [RFC 1321](https://www.rfc-editor.org/rfc/rfc1321), MD5, for version 3, and
+  [FIPS 180-4](https://csrc.nist.gov/pubs/fips/180-4/upd1/final), SHA-1, for
+  version 5. Both come from [cryptex](https://github.com/Lex-Dellimere/Cryptex).
 - [ULID spec](https://github.com/ulid/spec) and
   [Crockford's base32](https://www.crockford.com/base32.html).
 

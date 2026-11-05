@@ -46,9 +46,8 @@ The same fixed offsets in reverse, with a 16-character digit table.
   (section 6.10) unless `uuid_set_node` gives a real one; the clock sequence
   is random.
 - **v3 and v5** hash the namespace's 16 bytes then the name, take the first
-  16 bytes of the digest and set the version and variant. MD5 and SHA-1 are
-  carried here, small and plain, because no other Mettle package has MD5 and
-  a base library should not pull in a crypto package for two legacy hashes.
+  16 bytes of the digest and set the version and variant. The hashes come
+  from cryptex (`cr_md5_*`, `cr_sha1_*`), the ecosystem's crypto package.
 - **v8** is your bytes with version and variant set.
 
 ## Ordering and hashing
